@@ -51,7 +51,6 @@ int main(){
             }
         }
     }
-    string ans;
     for(int i=1; i<=n; ++i){
         if(i == src){
             continue;
