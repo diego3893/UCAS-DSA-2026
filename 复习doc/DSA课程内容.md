@@ -263,7 +263,7 @@ int data[105];
 int next[105]; // next[i]为data[i]的后继下标
 int head[105]; // head[i]存第i张表的表头下标
 int head_idx = 1;
-//初始化，next[0]用来维护空闲节点
+// 初始化，next[0]用来维护空闲节点
 for(int i=0; i<100; ++i){
     next[i] = i+1;
 }
