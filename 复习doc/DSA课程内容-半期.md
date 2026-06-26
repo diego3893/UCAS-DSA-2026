@@ -1,4 +1,4 @@
-# DSA课程内容doc
+# DSA课程内容doc-半期
 
 - 以代码和相关操作为导向，涵盖了一些个人认为重要的知识点
 - 包含某些对出题方向和考点的推测
@@ -345,7 +345,7 @@ s->top--;
 
 - DFS、递归
 
-![](C:\Users\30130\Desktop\workstation\DSA\复习doc\运算符优先级表.jpg)
+![](./运算符优先级表.jpg)
 
 - 表达式求值、转换：前缀表达式、中缀表达式、后缀表达式
   - 后缀求值
@@ -863,7 +863,7 @@ typedef struct GLNode{
 } Glist;
 ```
 
-![](C:\Users\30130\Desktop\workstation\DSA\复习doc\表头表尾示意图.jpg)
+![](./表头表尾示意图.jpg)
 
 - 上图的广义表可以如下表示：
   - B=(e)
@@ -891,7 +891,7 @@ typedef struct GLNode {
 } Glist;
 ```
 
-![](C:\Users\30130\Desktop\workstation\DSA\复习doc\子表分析法.jpg)
+![](./子表分析法.jpg)
 
 - 更符合直觉性思维的一种写法
 
