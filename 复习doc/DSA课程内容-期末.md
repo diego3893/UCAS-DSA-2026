@@ -467,3 +467,741 @@ for(int k=1; k<=n; ++k){
 }
 ```
 
+---------------
+
+## 7 动态存储管理
+
+- 考虑堆内存的管理方式
+- 可利用空间表：将所有可用空间串起来形成一个链表
+  - 分配时，从表中选择合适的块分配，并从表中删除
+  - 回收时，将回收块插入表
+- 空闲块组织方式：
+  - 大小相同
+  - 大小满足一定规格
+  - 大小不确定
+
+### 7.0 三种常见的分配策略
+
+- 假设分配空间大小为n
+- 首次拟合法
+  - 分配：查表，找第一个比n大的空闲块，分配n的空间，剩余部分仍空闲
+  - 回收：插入到表头
+- 最佳拟合法
+  - 扫描整个表，找大于n且最接近n的块，分配n的空间，剩余部分仍空闲
+  - 回收：插入到合适的位置
+  - 一般的，为了让查表节省时间，需要维护表的单调增
+  - 适用于请求分配的内存块大小范围较广的系统
+- 最差拟合法
+  - 分配：找最大的那个块来分配
+  - 回收：插入到合适位置
+  - 维护表单调减
+  - 适用于请求分配的内存块的大小范围较窄的系统
+
+### 7.1 边界标识法
+
+- 双重循环链表，pav为指向当前节点的指针
+- 每个内存区域的**头部**和**底部**两个边界上分别设置标识
+  - 为什么头尾都要标识？
+  - 回收块首地址-1为上一个块的尾标识，回收块尾地址+1是下一个块的头标识
+  - 易于判别在物理位置上与其相邻的内存区域是否为空闲块，以便于将**所有地址连续的空闲存储区**合并成一个尽可能大的空闲块
+- 块结构如下图：
+  - llink、rlink：构成空闲块的双重循环链表的指针
+  - tag：是否空闲
+  - size：空闲块大小
+  - uplink：从当前块的foot指向head，便于快速修改合并之后的head标签
+
+![](./边界标识法.jpg)
+
+- 分配：
+  - 约定1：选定常量e作为最小内存碎片大小，即当分配块大小为m，需分配空间为n时：
+    - $m-n\leq e$，分配整个块
+    - $m-n>e$，分配n，剩余空间保持空闲
+  - 约定2：从上次分配节点的后继节点开始查表，即pav不会每次都从表头开始
+  - 可以使用**首次拟合法**来分配
+  - 每次分配时返回**头地址**，即返回块m的首地址，将原块m的第$m-n$个地址作为新空闲块的首地址
+- 回收：
+  - 注意把相邻的空闲块合并起来
+  - 如果可以合并，则直接在合并块的位置修改标识；如果不可以合并，插入到pav后面
+- **画图注意事项**：
+  - 分配时：首次拟合，pav结束位置为分配节点的后继
+  - 回收时：
+    - 如果不需要合并，空闲块插入在pav的前或后，pav指向这个块
+    - 如果合并，合并结束后，pav指向合并块
+
+### 7.2 伙伴系统
+
+- 空闲块大小符合规格$2^k$
+- 图示如下：
+  - 由一个数组形成的表头组织
+  - 每个子表为一张可用空间表，双重循环链表，保存所有大小一致的空闲块
+
+![](./伙伴系统.jpg)
+
+- 分配：
+  - 优先查找恰好可以分配的，即$2^{k-1}<n\leq 2^k-1$，第k+1张子表有空闲节点，分配一个大小为$2^k$的节点
+  - 否则，从第k+1张表开始向后查找，直到找到一张非空子表，从中分配$2^k$大小的空间，其余空间按照各自对应的大小插入相应的子表
+    - 例如，第k+2张子表非空，$2^{k+1}$分配$2^k$，剩余的$2^k$空间作为空闲块插入到第k+1张子表
+- 回收：
+  - 合并互为伙伴的两个块
+  - 这个过程会递归进行，直到无法再次合并
+  - 伙伴空闲块的确定如下（首地址为p，大小为$2^k$的块）：
+    - $buddy(p,k)=\begin{cases}p+2^k,\ if\ p\ mod\ 2^{k+1}=0\\p-2^k,\ if\ p\ mod\ 2^{k+1}=2^k\end{cases}$
+  - 若无法合并，直接插入相应子表即可
+- 画图就是按照上述过程执行即可，没有特别易错的点
+
+### 7.3 无用单元收集
+
+- 将内存空间看做一张广义表，用来维护变量/数据之间的引用关系
+
+#### 7.3.0 引用计数
+
+- 在所使用的数据结构/对象中增加一个计数域，它的值为指向该数据结构/对象的指针数目
+- 当该计数器值为0时，该数据结构才被释放
+- 不足：不能应对循环引用
+
+#### 7.3.1 标记后清除 Mark and Sweep
+
+- Mark：暂停执行程序，从根集合(root set)/当前正在工作的指针变量开始遍历，**标记**被直接或间接引用的对象
+- Sweep：将**未标记的对象**都当作垃圾，把这些空间链接在一起，形成一个新的可用空间表，然后，再继续程序执行
+- 不足：需要中断程序执行
+
+----------
+
+## 8 查找/搜索
+
+- 分为静态查找表和动态查找表
+- 评价指标：平均查找长度，即需要和给定值进行比较的关键字的个数的期望值
+  - $ASL=\Sigma_{i=1}^nP_i\times C_i，其中\Sigma P_i=1$
+  - $P_i$：查找第i个记录的概率，一般取$P_i=\frac{1}{n}$
+  - $C_i$：查找第i个记录需要进行比较的次数
+
+### 8.0 顺序查找
+
+- 扫描整个表，在找到时退出并返回，否则认为没有找到
+- 代码很显然
+
+```c++
+for(int i=1; i<=n; ++i){
+    if(arr[i] == key){
+        return i;
+    }
+}
+return -1;
+```
+
+- ASL
+  - 查找成功：$ASL=\Sigma_{i=1}^nP_i\times C_i=\frac{1}{n}\Sigma_{i=1}^n(n-i+1)=\frac{n+1}{2}$
+  - 查找失败需要$n+1$次比较
+  - 综合考虑，取失败和成功各$\frac{1}{2}$，$ASL=\frac{n+1}{4}+\frac{n+1}{2}=\frac{3(n+1)}{4}$
+
+### 8.1 有序表查找
+
+#### 8.1.0 折半查找
+
+- 二分查找
+- 维护$[low, high]$区间，通过比较$mid=\frac{low+high}{2}$处元素和目标，不断缩小区间
+
+```c++
+int low = 1, high = n;
+int mid;
+while(low <= high){
+	mid = (low+high)/2;
+    if(arr[mid] == key){
+        return mid;
+	}else if(arr[mid] < key){
+        low = mid+1;
+	}else if(arr[mid] > key){
+        high = mid-1;
+    }
+}
+return -1;
+```
+
+- $ASL_{succ}=\frac{n+1}{n}\log (n+1)-1，n>50时近似为\log (n+1)-1$
+
+- 实际计算也可以画出判定树
+
+  - 内部节点表示succ的情况，叶子表示查找失败的情况
+  - 路径上的顶点数为比较次数
+
+  ![](./折半查找的判定树.jpg)
+
+#### 8.1.1 Fibonacci查找
+
+- 查找表大小为$n=fib(j)-1=fib(j-1)-1+fib(j-2)-1+1$
+- 所以，当n不满足上述条件时，对n扩充到最小的$fib(j)-1$，同时保持有序性
+
+```c++
+int low = 1, high = fib(n)-1;
+int mid, f1 = fib(n-1), f2 = fib(n-2);
+while(low <= high){
+	mid = low+f1-1;
+    if(arr[mid] == key){
+        return mid;
+	}else if(key < arr[mid]){
+        high = mid-1;
+        f2 = f1-f2; // f2=fib(n-3)
+        f1 = f1-f2; // f1=fib(n-2)
+	}else if(key > arr[mid]){
+        low = mid+1;
+        f1 = f1-f2; // f1=fib(n-3)
+        f2 = f2-f1; // f2=fib(n-4)
+    }
+}
+return -1;
+```
+
+#### 8.1.2 插值查找
+
+- 根据key值来决定与哪个记录比较 并分区
+- $i=\frac{key-arr[l]}{arr[h]-arr[l]}(h-l+1)$，将key和arr[i]比较
+- 适用于关键字分布均匀的情况
+
+### 8.2 索引顺序查找/分块查找
+
+- 将查找表分块
+  - 块内无序，块间有序
+  - 第i块的值**全部**小于第i+1块的值
+
+- 在查找表的基础上附加一个索引表
+  - 索引表有序
+  - 索引表包含：块的极值（最大值），块的起始指针
+- 用折半查找/顺序查找找到块，块内进行顺序查找
+
+![](./分块查找.jpg)
+
+```c++
+// 表长n，b个块
+int i = 0, j;
+while((i<b) && ind[i].maxkey<key){
+    i++;
+}
+if(i >= b){
+    return -1;
+}
+j = ind[i].startpos;
+int end_pos = (i+1<b)?(ind[i+1].startpos):n;
+while(j < end_pos){
+    if(arr[j] == key){
+        return j;
+	}
+    j++;
+}
+return -1;
+```
+
+- ASL
+  - n个记录，均分为b块，每块s个记录，即块的查找概率$\frac{1}{b}$，块内查找概率$\frac{1}{s}$
+  - $ASL = \frac{b+1}{2}+\frac{s+1}{2}$
+  - $s=\sqrt n，ASL_{min}=\sqrt n+1$
+
+### 8.3 静态树表/次优查找树的查找
+
+- 构造次优查找树比构造最优查找树省时间
+- 有点像huffman树，希望带权内路径长度之和尽可能小
+  - $PH = \Sigma_{i=1}^nw_i\times h_i，h_i为层数（路径长度）$
+- 现有有序序列$r_l,r_{l+1},...,r_h$，对应权值$w_l,w_{l+1},...,w_h$
+  - 希望$\Delta P_i=|\Sigma_{j=i+1}^hw_j-\Sigma_{j=l}^{i-1}w_j|$最小，即从i划分，两侧划分的权值之差最小
+  - 考虑前缀和优化，定义$sw_i=\Sigma_{j=l}^iw_j,\ sw_{l-1}=0$
+  - 易得$\Delta P_i=|(sw_h-sw_i)-(sw_{i-1}-sw_{l-1})|$
+- 代码实现思路：
+  - 计算整个序列的前缀和sw
+  - 对当前区间：
+    - 枚举每个分割点i，找出使得$\Delta P_i$最小的i
+    - 在i处建立一个树节点
+    - 递归处理左区间和右区间，分别作为左子树和右子树
+- 手算方法：
+  - 列表计算sw和$\Delta P$
+  - 根据$\Delta P$来建树
+  - 根据树计算PH
+
+### 8.4 二叉排序树
+
+- 左子树节点全部小于根，右子树节点全部大于根
+- 中序遍历得到一个有序序列
+- ASL计算需要建出具体的树，根据树的形状计算
+  - 一般的，对于n个元素的所有排列，期望$ASL=2\frac{n+1}{n}\log n+C$
+- 查找和插入算法是显然的
+- 删除需要讨论：
+  - p为叶子，直接删
+  - p有一棵子树，直接把子树接回父节点
+  - p两棵子树，找中序前驱，互换位置，删p'（p'至多一棵子树）
+
+```c++
+struct treeNode{
+    int data;
+    treeNode *lc, *rc, *parent;
+    treeNode(int key, treeNode *p): data(key), lc(NULL), rc(NULL), parent(p) {}
+};
+treeNode* searchBST(treeNode *root, int key){
+    if(!root){
+        return NULL;
+    }
+    if(root->data == key){
+        return root;
+    }else if(root->data > key){
+        return searchBST(root->lc, key);
+    }else{
+        return searchBST(root->rc, key);
+    }
+}
+treeNode* insertBST(treeNode *root, int key, treeNode *parent){
+	if(!root){
+        return (new treeNode(key, parent));
+	}
+    if(root->data == key){
+        return root;
+    }else if(root->data > key){
+        root->lc = insertBST(root->lc, key, root);
+        return root;
+    }else{
+        root->rc = insertBST(root->rc, key, root);
+        return root;
+    }
+}
+treeNode* deleteBST(treeNode *root, int key){
+    if (!root) {
+        return NULL; 
+    }
+    if(key < root->data){
+        root->lc = deleteBST(root->lc, key);
+        return root;
+    }else if(key > root->data){
+        root->rc = deleteBST(root->rc, key);
+        return root;
+    }else{
+        if(!root->lc){
+            treeNode *temp = root->rc;
+            if(temp){
+                temp->parent = root->parent; 
+            }
+            delete root;
+            return temp;
+        }else if(!root->rc){
+            treeNode *temp = root->lc;
+            if(temp){
+                temp->parent = root->parent; 
+            }
+            delete root;
+            return temp;
+        }else{
+            treeNode *pre = root->lc;
+            while(pre->rc){
+                pre = pre->rc;
+            }
+            root->data = pre->data;
+            root->lc = deleteBST(root->lc, pre->data);
+            return root;
+        }
+    }
+}
+```
+
+### 8.5 AVL树/平衡二叉树
+
+- BST plus
+- 保持平衡，维护两侧子树深度之差bf
+  - 左子树和右子树深度之差的绝对值不大于1
+  - 左子树和右子树也都是平衡二叉树
+- AVL通过旋转维护平衡（见下图）
+  - 对于RR，将左上方的点向下旋转成为中间顶点的左子树
+  - 对于LL，将右上方的点向下旋转成为中间顶点的右子树
+  - 对于LR，先将下方两个顶点向左转，此时成为LL，右旋即可
+  - 对于RL，先将下方两个顶点向右转，此时成为RR，左旋即可
+
+![](./旋转.jpg)
+
+![](./旋转示意图.jpg)
+
+```c++
+/**
+ * @brief 求高度信息
+ * 
+ * @param idx 节点下标
+ * @return int 高度信息
+ */
+static int getHeight(int idx){
+    return idx ? tree[idx].height : 0;
+}
+
+/**
+ * @brief 更新高度和平衡因子
+ * 
+ * @param idx 节点下标
+ */
+static void updateNode(int idx){
+    if(idx){
+        int lh = getHeight(tree[idx].left);
+        int rh = getHeight(tree[idx].right);
+        tree[idx].height = 1+max(lh, rh);
+        tree[idx].bf = rh-lh; 
+    }
+    return;
+}
+
+/**
+ * @brief 右旋
+ * 
+ * @param y 要右旋的不平衡的节点
+ * @return int 旋转后的子树根
+ */
+static int rightRotate(int y){
+    int x = tree[y].left;
+    tree[y].left = tree[x].right;
+    tree[x].right = y;
+    
+    updateNode(y);
+    updateNode(x);
+    return x;
+}
+
+/**
+ * @brief 左旋
+ * 
+ * @param x 要左旋的不平衡的节点
+ * @return int 旋转后的子树根
+ */
+static int leftRotate(int x){
+    int y = tree[x].right;
+    tree[x].right = tree[y].left;
+    tree[y].left = x;
+    
+    updateNode(x);
+    updateNode(y);
+    return y;
+}
+
+/**
+ * @brief 插入节点
+ * 
+ * @param idx 平衡树的根
+ * @param key 插入的键值
+ * @return int 平衡后的根
+ */
+static int insertNode(int idx, int key, bool& isInserted){
+    if(!idx){
+        isInserted = 1;
+        return newNode(key);
+    }
+    if(key < tree[idx].key){
+        int nextLeft = insertNode(tree[idx].left, key, isInserted);
+        tree[idx].left = nextLeft;
+    }else if(key > tree[idx].key){
+        int nextRight = insertNode(tree[idx].right, key, isInserted);
+        tree[idx].right = nextRight;
+    }else{
+        isInserted = 0;
+        return idx;
+    }
+
+    updateNode(idx); // 更新插入后的节点信息
+
+    if(tree[idx].bf < -1){ // 左侧更高
+        if(tree[tree[idx].left].bf <= 0){
+            return rightRotate(idx); // LL
+        }else{
+            int newLeft = leftRotate(tree[idx].left); // LR
+            tree[idx].left = newLeft;
+            return rightRotate(idx);
+        }
+    }
+    if(tree[idx].bf > 1){ // 右侧更高
+        if(tree[tree[idx].right].bf >= 0){
+            return leftRotate(idx); // RR
+        }else{
+            int newRight = rightRotate(tree[idx].right); // RL
+            tree[idx].right = newRight;
+            return leftRotate(idx);
+        }
+    }
+
+    return idx;
+}
+```
+
+- 画图就是BST的建立+旋转平衡的过程
+
+### 8.6 B树和B+树
+
+- 平衡的多路查找树
+- m阶B树满足：
+  - 每个节点至多m棵子树
+  - 根节点至少两棵子树
+  - 内部节点至少$\lceil \frac{m}{2} \rceil$棵子树
+  - 所有叶子在同一层
+- 节点形式为`(n, A0, K1, A1, K2,..., Kn, An)`
+  - n为键的个数
+  - $K_i$为键，单调增
+  - $A_i$为指针，保证：$A_{i-1}$的子树全部小于$K_i$，$A_i$的子树全部大于$K_i$
+
+- m阶B树是高度平衡的m叉查找树
+- 2阶B树是AVL树
+- 树高满足$h\leq \log_{\lceil\frac{m}{2}\rceil}(\frac{n+1}{2})+1$
+- B树的插入：
+  - 从某个合适的叶子开始插入、
+  - 如果叶子的键值到达m个，则开始分裂：
+    - 将$K_{\lceil \frac{m}{2}\rceil}$送入父节点的合适位置，该键值两侧分裂为两个子节点挂载到父节点下
+
+  - 递归检查父节点是否满足B树性质
+  - 如果根节点不满足，则分裂，$K_{\lceil \frac{m}{2}\rceil}$成为新根，树高+1
+
+
+![](./B树插入.jpg)
+
+- B树的删除，若删除键值在节点N，删除其中的$K_i$
+  - 若N不是叶子，则将$A_{i-1}$子树中的最大值（中序前驱）和$K_i$互换位置，此时需要处理的节点N变为叶子
+  - 如果N的关键字个数$>\lceil \frac{m}{2}\rceil-1$
+    - 直接删
+
+  - 如果关键字个数$=\lceil \frac{m}{2}\rceil-1$，且**相邻**的兄弟关键字个数$>\lceil \frac{m}{2}\rceil-1$
+    - 从相邻兄弟“借”一个紧挨的键值（左兄弟给最大值，右兄弟给最小值）
+    - 该键值并入父节点
+    - 将父节点中本来用以分割N以及其**借出键值的兄弟**的键值下移到N
+
+  - 如果兄弟都没法借，需要合并
+    - 将当前节点、它的一个兄弟节点，以及父节点中分隔这两个节点的那**一个中间关键字**，三者合并成一个新的单一节点
+    - 合并后，新节点包含的关键字数量为 $(\lceil \frac{m}{2} \rceil - 1 - 1) + 1 + (\lceil \frac{m}{2} \rceil - 1) = 2 \lceil \frac{m}{2} \rceil - 3$。由于 $2 \lceil \frac{m}{2} \rceil - 3 \le m - 1$，这个新节点绝对不会超出B树的容量上限
+      -  这一步会导致父节点失去了一个关键字和一个子节点指针，等效于父节点删了一个键值
+
+    - 向上递归处理父节点
+    - 如果根节点因合并导致没有关键字，则其唯一子节点为新根，树高-1
+
+
+![](./B树删除.jpg)
+
+- B+树
+  - 叶子包含全部关键字，且串成一个有序链表
+  - 内部节点包含下层节点的最值，看作是分块查找中的“块索引”
+  - 查找一定会从根走到叶子才会停止
+  - 插入
+    - 在叶子插入，大于m个键值则均分为两个节点，将两个节点的最值存入父节点
+    - 递归向上处理
+
+  - 删除
+    - 在叶子删除
+    - 小于$\lceil\frac{m}{2}\rceil$时，和兄弟合并
+
+
+![](./B+树.jpg)
+
+### 8.7 键树
+
+- 节点包含符号，从根开始的路径可以表示不同的关键字
+- 多叉树，和基的选择有关
+- 一般的，键树使用孩子-兄弟链表存储
+  - 对于双链树，最大度为d，树深h，$ASL=\frac{h}{2}(1+d)$
+
+![](./键树.jpg)
+
+- Trie树/字典树
+  - 使用多重链表实现
+  - 26个字母，所以直接在每个节点定义26个指针域，分别代表一个字母即可
+    - Trie树的字符存在**边**上，不在点上！
+  - 插入
+    - 逐个字符处理
+    - 检索当前节点该字符是否有边，有则向下，否则新建节点
+    - 处理最后一个字符后，在尾节点的cnt+1，统计出现次数
+  - 查找、删除逻辑和插入完全一致
+
+```c++
+struct node{
+    int nxt[26];
+    int cnt;
+    node(){
+        memset(nxt, -1, sizeof(nxt));
+        cnt = 0;
+    }
+};
+
+void trie_insert(vector<node>& trie, const string& s){
+    int p = 0;
+    int len = s.length();
+    for(int i=0; i<len; ++i){
+        int u = s[i]-'a';
+        if(trie[p].nxt[u] == -1){
+            node tmp;
+            trie.push_back(tmp);
+            trie[p].nxt[u] = trie.size()-1;
+        }
+        p = trie[p].nxt[u];
+    }
+    trie[p].cnt++;
+    return;
+}
+
+int trie_search(const vector<node>& trie, const string& s){
+    int p = 0;
+    int len = s.length();
+    for(int i=0; i<len; ++i){
+        int u = s[i]-'a';
+        if(trie[p].nxt[u] == -1){
+            return 0;
+        }
+        p = trie[p].nxt[u];
+    }
+    if(trie[p].cnt > 0){
+        return p;
+    }else{
+        return 0;
+    }
+}
+
+void trie_delete(vector<node>& trie, const string& s){
+    int p = trie_search(trie, s);
+    if(!p){
+        return;
+    }
+    trie[p].cnt--;
+    return;
+}
+```
+
+### 8.8 哈希表
+
+- 用一个函数将键值映射到一个整数，将这个整数直接作为键值存储的地址，O(1)查找
+- 可能有哈希冲突，所以取出值之后需要比较是否一致
+  - 哈希冲突：对于关键字$k_i \neq k_j$，但$H(k_i)=H(k_j)$
+- 装填因子$\alpha=\frac{表中填入的记录数}{哈希表长度}$
+
+#### 8.8.0 哈希函数构造
+
+- 直接定址
+
+  - $H(key) = a·key+b$
+  - 不会冲突
+
+- 数字分析
+
+  - 若关键字为以r为基的数，取关键字的若干位或组合作为哈希地址
+
+  ![](./数字分析法.jpg)
+
+- 平方取中
+  - 关键字平方之后，取中间的几位作为地址
+- 折叠
+  - 将关键字分割为位数相同的几部分，取叠加和为哈希值
+  - 移位叠加：各部分平移叠加（低位对齐）
+  - 间界叠加：来回折叠进行叠加
+- 除留余数
+  - $H(key)=key\ mod\ p$
+  - p为质数，一般取$10007, 1e9+7$等
+- 随机数
+- 对于字符串求哈希：
+  - 字符串考虑ASCII码有128种，取基$b=131$，模$p=10007或者1e9+7$
+  - 对于$w=w_1w_2w_3...w_k，H(w)=(w_1*b^{k-1}+w_2*b^{k-2}+...+w_k*b^0)\ mod\ p$
+  - 这种哈希函数可以用来做模式匹配
+
+#### 8.8.1 冲突处理
+
+- 开放定址
+  - 根据规则，从冲突位置开始寻找，直到找到一个空地址，来存放数据
+  - $H_0(key)=H(key),H_i(key)=(H(key)+d_i)\ mod\ m$
+  - $d_i$为人为规定的增量序列
+    - 线性探测法，$d_i=1,2,3,...,m-1$
+    - 二次探测法：$d_i=1^2,-1^2,2^2,-2^2,...,k^2,-k^2$
+      - 定理：当表长m是质数，且装填因子小于等于 0.5，可以找出空闲地址
+      - 定理：表长 m 是形如4j+3的质数时，可以保证查找链的前m项均互异
+    - 伪随机探测法
+- 多哈希
+  - 构造多个哈希函数
+  - 逐个计算，直到发现不冲突的哈希值
+- 链地址
+  - 在冲突的哈希地址处建立子表，将所有冲突键值存在子表内
+- 建立公共溢出区
+  - 对于冲突的键值，直接插入溢出区的后续空闲位置
+    - 在溢出区只能顺序查找
+
+#### 8.8.2 ASL
+
+- 线性探测
+  - $S_{nl成功}\approx \frac{1}{2}\times (1+\frac{1}{1-\alpha})$
+  - $U_{nl失败}\approx \frac{1}{2}\times (1+\frac{1}{(1-\alpha)^2})$
+- 二次、伪随机、多哈希
+  - $S_{nl成功}\approx -\frac{1}{\alpha}\times \ln(1-\alpha))$
+  - $U_{nl失败}\approx \frac{1}{1-\alpha}$
+- 链地址
+  - $S_{nl成功}\approx 1+\frac{\alpha}{2}$
+  - $U_{nl失败}\approx \alpha+e^{-\alpha}$
+
+-------
+
+## 9 内部排序
+
+
+
+---------
+
+## 10 外部排序
+
+- 先分块进行内排序，得到初始归并段
+- 对初始归并段进行归并排序，逐步合并，最后全局有序
+- 运行方式：
+  - 读入初始归并段，内部排序，输出初始归并段
+  - 为k个初始归并段分配k个输入缓冲区，每个输入缓冲区一个指针指向当前参与排序的键值
+  - 分配一个输出缓冲区
+  - 每次从所有输入缓冲区中被指向的键值中选最小的那个，加入输出缓冲区，该输入缓冲区指针+1
+  - 输出缓冲区满，输出到外存并清空
+  - 输入缓冲区读完，清空，从归并段读入新数据
+- 如何减少访存次数？
+  - 增大路数k
+  - 减少初始归并段个数m
+
+### 10.0 k路归并
+
+- m个初始归并段，则归并树高$\lceil\log_km\rceil+1$
+
+- 引入败者树进行优化，内部归并时间退化为只和m,n相关
+
+- 败者树工作方式如下图：
+
+  - $k_3>k_4$，所以$k_3$输，在ls4记录败者段号3，$k_4$向上传递
+
+  - 其余节点同样操作
+
+  - ls0为冠军节点，不记录败者段号，记录最终胜者段号
+
+  - 为什么节点维护败者段号？
+
+    - 当05被取走，$k_1=44$
+    - 只需要更新当前叶子到根这一条路径即可，不用维护整棵树
+    - ls3与$k_2$比较，$k_2$胜出，ls3更新为1
+    - ls1中$k_2$和$k_4$比较，最终ls0=2
+
+    ![](./败者树.jpg)
+
+  - 如何创建败者树？
+
+    - 初始化所有内部节点为k，默认第k+1段的值为$-\inf$
+    - 逐个插入叶子，向上调整内部节点
+
+### 10.1 置换-选择排序
+
+- 减小m
+- 用败者树生成初始归并段，可以生成平均比原来大一倍的初始归并段，从而减少初始归并段个数
+- 运行过程（内存大小为k）：
+  - 初始化：从输入文件FI读入k个记录到内存，构造败者树，全局段号（当前正在归并的段号）初始化为0，内存所有记录段号初始化为0
+  - 构造归并段：选择最小的排序码放入输出文件FO，并将该排序码赋值给LastKey
+    - 从FI读入下一个数据，全局段号赋值给该数据的段号，调整败者树
+    - 败者树选择比LastKey大且最小的排序码，输出
+    - 败者树比较逻辑
+      - 段号小的为胜者
+      - 段号一致则键值小的为胜者
+    - 当冠军的值小于LastKey且段号等于全局段号，则将冠军的段号+1，表示这个元素应该在下一个段被归并，意味着这个冠军将被调整到败者树的中间节点去
+  - 当败者树中的最小值也比LastKey小，FO写入外存作为一个归并段，全局段号+1
+    - 当冠军的段号为全局段号+1时，意味着整棵败者树全部都是下一个归并段才处理的数据，即当前归并段处理完毕
+  - 重复上述过程，直到FI和内存为空
+
+### 10.2 最佳归并树
+
+- 正则k叉树
+  - 叶子为初始归并段
+  - 叶子权值为初始归并段的记录个数
+  - 根节点为最终归并段
+  - 内部节点权值为归并过程中的记录个数
+- 最佳归并树使得WPL最小，因为归并过程的读写总数为2*WPL
+- 补充空归并段（权值为0），使得归并树为一棵正则树
+  - 对于归并树有$n_0$个叶子，和$n_k=(n_0-1)/(k-1)$个度为k的内部节点
+  - $(n_0-1)\%(k-1)=u$，补充$(k-u-1)\%(k-1)$个空段
+- 类似huffman树的做法，权值小的先归并，权值大的后归并
+
+![](./最佳归并树.jpg)
